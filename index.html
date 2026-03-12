@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Combat Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Crimson+Text:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #191919; display: flex; justify-content: center; padding: 1rem; }
+    .tracker { background: #191919; padding: 0.75rem; font-family: 'Crimson Text', serif; width: 260px; }
+    h1 { font-family: 'Cinzel', serif; font-size: 11px; font-weight: 600; color: #c8a96e; letter-spacing: 2.5px; text-align: center; text-transform: uppercase; border-bottom: 1px solid #2e2e2e; padding-bottom: 0.5rem; margin-bottom: 0.65rem; }
+    .type-btns { display: flex; gap: 4px; margin-bottom: 0.5rem; }
+    .type-btn { flex: 1; font-family: 'Cinzel', serif; font-size: 10px; padding: 5px 0; border-radius: 4px; border: 1px solid #2e2e2e; cursor: pointer; background: #222222; color: #555555; letter-spacing: 0.5px; transition: all 0.15s; }
+    .type-btn.player.active { background: #1a3050; color: #7eb8f7; border-color: #2e5a96; }
+    .type-btn.enemy.active { background: #3e1414; color: #f78080; border-color: #8c3030; }
+    .type-btn.npc.active { background: #1e3214; color: #90cc68; border-color: #3e6e20; }
+    .add-form { display: grid; grid-template-columns: 1fr auto; gap: 4px; margin-bottom: 0.65rem; }
+    .add-form input { background: #222222; border: 1px solid #2e2e2e; color: #d4d4d4; font-family: 'Crimson Text', serif; font-size: 14px; padding: 5px 8px; border-radius: 4px; outline: none; width: 100%; }
+    .add-form input::placeholder { color: #444444; }
+    .add-form input:focus { border-color: #c8a96e; }
+    .btn-add { background: #c8a96e; color: #191919; border: none; font-family: 'Cinzel', serif; font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+    .btn-add:hover { background: #dfc07e; }
+    .combatants-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 0.6rem; }
+    .combatant { display: flex; align-items: center; gap: 7px; padding: 6px 8px; border-radius: 4px; border: 1px solid #252525; background: #1e1e1e; cursor: grab; user-select: none; }
+    .combatant:active { cursor: grabbing; }
+    .combatant.dragging { opacity: 0.25; }
+    .combatant.drag-over { border-color: #c8a96e; }
+    .combatant.player { border-left: 2px solid #2e5a96; }
+    .combatant.enemy { border-left: 2px solid #8c3030; }
+    .combatant.npc { border-left: 2px solid #3e6e20; }
+    .combatant.dead { opacity: 0.3; }
+    .combatant.dead .name { text-decoration: line-through; }
+    .drag-handle { color: #333333; font-size: 12px; flex-shrink: 0; line-height: 1; }
+    .name { font-size: 14px; color: #d4d4d4; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .combatant.dead .name { color: #555555; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; cursor: pointer; flex-shrink: 0; transition: transform 0.1s; }
+    .status-dot:hover { transform: scale(1.3); }
+    .status-dot.alive { background: #3e7a28; }
+    .status-dot.unconscious { background: #8a6a2e; }
+    .status-dot.dead { background: #8c3030; }
+    .remove-btn { background: transparent; border: none; color: #333333; cursor: pointer; font-size: 16px; line-height: 1; padding: 0; transition: color 0.15s; }
+    .remove-btn:hover { color: #cc5555; }
+    .footer { text-align: center; }
+    .btn-clear { background: transparent; border: 1px solid #2a1515; color: #553030; font-family: 'Cinzel', serif; font-size: 10px; padding: 4px 16px; border-radius: 4px; cursor: pointer; letter-spacing: 0.5px; transition: all 0.15s; }
+    .btn-clear:hover { border-color: #8c3030; color: #f78080; background: #1e0e0e; }
+    .empty-state { text-align: center; padding: 1.2rem; color: #383838; font-style: italic; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="tracker">
+    <h1>⚔ Combat</h1>
+
+    <div class="type-btns">
+      <button class="type-btn player active" onclick="setType('player',this)">Player</button>
+      <button class="type-btn enemy" onclick="setType('enemy',this)">Enemy</button>
+      <button class="type-btn npc" onclick="setType('npc',this)">NPC</button>
+    </div>
+
+    <div class="add-form">
+      <input type="text" id="name-input" placeholder="Name..." onkeydown="if(event.key==='Enter')addC()" />
+      <button class="btn-add" onclick="addC()">+ Add</button>
+    </div>
+
+    <div class="combatants-list" id="list"></div>
+
+    <div class="footer">
+      <button class="btn-clear" onclick="clearAll()">Clear All</button>
+    </div>
+  </div>
+
+  <script>
+    var combatants = [];
+    var currentType = 'player';
+    var dragSrcIdx = null;
+
+    function setType(type, btn) {
+      currentType = type;
+      document.querySelectorAll('.type-btn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+    }
+
+    function addC() {
+      var name = document.getElementById('name-input').value.trim();
+      if (!name) return;
+      combatants.push({ id: Date.now(), name: name, type: currentType, status: 'alive' });
+      document.getElementById('name-input').value = '';
+      document.getElementById('name-input').focus();
+      render();
+    }
+
+    function removeC(id) {
+      combatants = combatants.filter(function(c){ return c.id !== id; });
+      render();
+    }
+
+    function cycleStatus(id) {
+      var c = combatants.find(function(x){ return x.id === id; });
+      var s = ['alive','unconscious','dead'];
+      c.status = s[(s.indexOf(c.status) + 1) % s.length];
+      render();
+    }
+
+    function clearAll() {
+      combatants = [];
+      render();
+    }
+
+    function render() {
+      var list = document.getElementById('list');
+      if (!combatants.length) {
+        list.innerHTML = '<div class="empty-state">No combatants yet</div>';
+        return;
+      }
+      list.innerHTML = combatants.map(function(c, i) {
+        return '<div class="combatant ' + c.type + (c.status === 'dead' ? ' dead' : '') + '" draggable="true" data-idx="' + i + '">'
+          + '<span class="drag-handle">⠿</span>'
+          + '<div class="name">' + c.name + '</div>'
+          + '<div class="status-dot ' + c.status + '" onclick="cycleStatus(' + c.id + ')" title="' + c.status + '"></div>'
+          + '<button class="remove-btn" onclick="removeC(' + c.id + ')">×</button>'
+          + '</div>';
+      }).join('');
+
+      list.querySelectorAll('.combatant').forEach(function(el) {
+        el.addEventListener('dragstart', function(e) {
+          dragSrcIdx = parseInt(el.getAttribute('data-idx'));
+          setTimeout(function(){ el.classList.add('dragging'); }, 0);
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        el.addEventListener('dragend', function() {
+          el.classList.remove('dragging');
+          list.querySelectorAll('.combatant').forEach(function(x){ x.classList.remove('drag-over'); });
+        });
+        el.addEventListener('dragover', function(e) {
+          e.preventDefault();
+          list.querySelectorAll('.combatant').forEach(function(x){ x.classList.remove('drag-over'); });
+          el.classList.add('drag-over');
+        });
+        el.addEventListener('drop', function(e) {
+          e.preventDefault();
+          var targetIdx = parseInt(el.getAttribute('data-idx'));
+          if (dragSrcIdx === null || dragSrcIdx === targetIdx) return;
+          var moved = combatants.splice(dragSrcIdx, 1)[0];
+          combatants.splice(targetIdx, 0, moved);
+          dragSrcIdx = null;
+          render();
+        });
+      });
+    }
+
+    render();
+  </script>
+</body>
+</html>
